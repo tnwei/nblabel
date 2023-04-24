@@ -11,7 +11,7 @@ Scratching my own itch to have a tabular data labelling tool that fits within th
 
 ## Usage
 
-WIP, but currently looks like this:
+Disclaimer: early WIP, currently looks like this:
 
 ```python
 from nblabel import label
@@ -26,7 +26,9 @@ label(
 
 ![](assets/datasaurus-example.jpeg)
 
-Just save the `df` when you are done:
+Use the selector tool for True / False annotations (more than enough for labelling anomaly detection datasets atm). Note that the selector tool is a toggle: selecting the same data point again will flip the label.
+
+Save the `df` when you are done:
 
 ```python
 df.to_csv("nblabel-example-output.csv")
