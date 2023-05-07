@@ -5,13 +5,15 @@ import traitlets
 import bqplot
 import ipywidgets as ipy
 from collections import OrderedDict
-from typing import Any, Text
+from typing import Any, Text, Optional
 
 
 def label(
     df: pd.DataFrame,
     x_col: Any = "x",
     y_col: Any = "y",
+    # labels=["false", "true"],
+    # default_label="false",
     label_col_name: Text = "selected",
     title: Text = "nblabeller",
 ):
@@ -24,17 +26,31 @@ def label(
     if y_col is None:
         y_col = "y"
 
+    # bool threw errors somewhere in bqplot
+    labels = ["false", "true"]
+
+    if len(labels) > 10:
+        raise ValueError(
+            "Max number of labels supported is 10 at this point in time, currently have {len(labels) labels}"
+        )
+
+    default_label = labels[0]
+
     assert x_col in df.columns, f"x_col: {x_col} not in df!"
     assert y_col in df.columns, f"y_col: {y_col} not in df!"
 
+    assert default_label in labels
+
+    # Determine best dtype for the labels
+    # https://www.geeksforgeeks.org/how-to-convert-to-best-data-types-automatically-in-pandas/
+    best_dtype = pd.Series(labels).convert_dtypes().dtype
+
     if label_col_name in df.columns:
-        # Whole col dtype is not bool, but np.dtype("bool")
-        assert df[label_col_name].dtype is np.dtype("bool"), (
-            f"Column {label_col_name} dtype should be bool, but is {df[label_col_name].dtype}. "
-            + "Use another label_col_name instead"
-        )
+        pass
     else:
-        df.loc[:, label_col_name] = False
+        df.loc[:, label_col_name] = pd.Series(
+            [default_label] * len(df), dtype=best_dtype
+        )
 
     scales = {}
 
@@ -50,30 +66,21 @@ def label(
     else:
         scales["y"] = bqplot.LinearScale()
 
-    scatter = bqplot.Scatter(
-        x=df.loc[df[label_col_name] == False, x_col],
-        y=df.loc[df[label_col_name] == False, y_col],
-        scales=scales,
-        colors=["gray"],
-        # For some reason, opacity doesn't work
-        # TODO troubleshoot
-        opacity=np.array([0.05] * len(df.loc[df[label_col_name] == False])),
-        # Don't need legend formatting if colors are clear
-        # display_legend=True,
-        # name="Not selected",
-        # labels=["Not selected"] * len(df.loc[df["selected"] == False])
+    # Configure color scale
+    scales["color"] = bqplot.OrdinalColorScale(
+        domain=labels,
+        # CATEGORY10 only has 10! TODO expand later
+        colors=bqplot.CATEGORY10[: len(labels)],
     )
 
-    selected_scatter = bqplot.Scatter(
-        x=df.loc[df[label_col_name] == True, x_col],
-        y=df.loc[df[label_col_name] == True, y_col],
+    scatter = bqplot.Scatter(
+        x=df[x_col],
+        y=df[y_col],
         scales=scales,
-        colors=["orange"],
-        opacity=[1],
-        # Don't need legend formatting if colors are clear
-        # display_legend=True,
-        # name="Selected",
-        # labels=["Selected"] * len(df.loc[df["selected"] == True])
+        color=df[label_col_name],
+        # For some reason, opacity doesn't work
+        # TODO troubleshoot
+        # opacity=np.array([0.05] * len(df.loc[df[label_col_name] == default_label])),
     )
 
     sel = bqplot.interacts.BrushSelector(
@@ -81,7 +88,7 @@ def label(
         y_scale=scales["y"],
         # marks required so that the mark itself can have
         # .selected attribute
-        marks=[scatter, selected_scatter],
+        marks=[scatter],
     )
 
     # Inspired by this fine piece of code
@@ -127,18 +134,13 @@ def label(
 
     # For some reason, Tooltips don't show up
     # TODO troubleshoot
-    scatter.tooltip = bqplot.Tooltip(
-        fields=["x", "y"], labels=["x", "y"], formats=["", ".2f"]
-    )
-
-    selected_scatter.tooltip = bqplot.Tooltip(
-        fields=["x", "y"],
-        labels=["x", "y"],
-    )
+    # scatter.tooltip = bqplot.Tooltip(
+    #     fields=["x", "y"], labels=["x", "y"], formats=["", ".2f"]
+    # )
 
     # Pass the Selector instance to the Figure
     fig = bqplot.Figure(
-        marks=[scatter, selected_scatter],
+        marks=[scatter],
         axes=[x_ax, x_ay],
         title=title,
         interaction=interacts.value,
@@ -151,28 +153,23 @@ def label(
             # Update the manual "selected" toggle
             idxs_to_toggle = scatter.selected
             if idxs_to_toggle is not None:
-                idxs_to_toggle_globalized = df[df[label_col_name] == False].index[
-                    idxs_to_toggle
-                ]
-                df.loc[idxs_to_toggle_globalized, label_col_name] = True
 
-            # Update the manual "selected" toggle
-            idxs_to_toggle = selected_scatter.selected
-            if idxs_to_toggle is not None:
-                idxs_to_toggle_globalized = df[df[label_col_name] == True].index[
-                    idxs_to_toggle
-                ]
-                df.loc[idxs_to_toggle_globalized, label_col_name] = False
+                def flip(x):
+                    if x == "false":
+                        return "true"
+                    elif x == "true":
+                        return "false"
 
-            # Refresh xy's
-            # Tips from https://bqplot.readthedocs.io/en/latest/usage/updating-plots/ for hold_sync()
-            with scatter.hold_sync():
-                scatter.x = df.loc[df[label_col_name] == False, x_col]
-                scatter.y = df.loc[df[label_col_name] == False, y_col]
+                df.loc[idxs_to_toggle, label_col_name] = df.loc[
+                    idxs_to_toggle, label_col_name
+                ].apply(flip)
 
-            with selected_scatter.hold_sync():
-                selected_scatter.x = df.loc[df[label_col_name] == True, x_col]
-                selected_scatter.y = df.loc[df[label_col_name] == True, y_col]
+                # Refresh plot
+                # Tips from https://bqplot.readthedocs.io/en/latest/usage/updating-plots/ for hold_sync()
+                with scatter.hold_sync():
+                    scatter.color = df["selected"].tolist()
+            else:
+                pass
 
     reset_zoom_btn = ipy.Button(
         description="Reset zoom",
@@ -194,13 +191,13 @@ def label(
 
     def get_counts():
         val_counts = df[label_col_name].value_counts()
-        if True in val_counts.index:
-            true_counts = val_counts.loc[True]
+        if "true" in val_counts.index:
+            true_counts = val_counts.loc["true"]
         else:
             true_counts = 0
 
-        if False in val_counts.index:
-            false_counts = val_counts.loc[False]
+        if "false" in val_counts.index:
+            false_counts = val_counts.loc["false"]
         else:
             false_counts = 0
 
@@ -215,9 +212,6 @@ def label(
         html_div.value = get_counts()
 
     sel.observe(currently_selected, "selected")
-
-    # Instead of using a dropdown, use buttons
-    # dropdown.observe(update_tool, "value")
     traitlets.link((interacts, "value"), (fig, "interaction"))
 
     sel.observe(update_toggle_selector, "brushing")
