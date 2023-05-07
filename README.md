@@ -19,14 +19,14 @@ from nblabel import label
 label(
     df, # The dataframe to use
     x_col="x", y_col="y", # Columns for x-axis and y-axis
+    labels=["a", "b", "c"], # Specify what labels to use
+    default_label="b", # Specify what default label to populate
     label_col_name="selected", # Column to store labels
     title="nblabeller" # Plot title
 )
 ```
 
 ![](assets/datasaurus-example.jpeg)
-
-Use the selector tool for True / False annotations (more than enough for labelling anomaly detection datasets atm). Note that the selector tool is a toggle: selecting the same data point again will flip the label.
 
 Save the `df` when you are done:
 
