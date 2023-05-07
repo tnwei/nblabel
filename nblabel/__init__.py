@@ -10,10 +10,10 @@ from typing import Any, Text, Optional
 
 def label(
     df: pd.DataFrame,
-    x_col: Any = "x",
-    y_col: Any = "y",
-    # labels=["false", "true"],
-    # default_label="false",
+    x_col: Any = None,
+    y_col: Any = None,
+    labels=None,
+    default_label=None,
     label_col_name: Text = "selected",
     title: Text = "nblabeller",
 ):
@@ -26,20 +26,28 @@ def label(
     if y_col is None:
         y_col = "y"
 
-    # bool threw errors somewhere in bqplot
-    labels = ["false", "true"]
+    if labels is None:
+        # bool threw errors somewhere in bqplot
+        labels = ["false", "true"]
+
+    assert len(labels) == len(set(labels)), "Duplicated values passed in `labels`!"
 
     if len(labels) > 10:
         raise ValueError(
             "Max number of labels supported is 10 at this point in time, currently have {len(labels) labels}"
         )
 
-    default_label = labels[0]
+    if default_label is None:
+        default_label = labels[0]
 
     assert x_col in df.columns, f"x_col: {x_col} not in df!"
     assert y_col in df.columns, f"y_col: {y_col} not in df!"
 
     assert default_label in labels
+
+    label_class_dropdown = ipy.Dropdown(
+        description="Label", options=labels, value=default_label
+    )
 
     # Determine best dtype for the labels
     # https://www.geeksforgeeks.org/how-to-convert-to-best-data-types-automatically-in-pandas/
@@ -153,17 +161,9 @@ def label(
             # Update the manual "selected" toggle
             idxs_to_toggle = scatter.selected
             if idxs_to_toggle is not None:
+                current_label_class = label_class_dropdown.value
 
-                def flip(x):
-                    if x == "false":
-                        return "true"
-                    elif x == "true":
-                        return "false"
-
-                df.loc[idxs_to_toggle, label_col_name] = df.loc[
-                    idxs_to_toggle, label_col_name
-                ].apply(flip)
-
+                df.loc[idxs_to_toggle, label_col_name] = current_label_class
                 # Refresh plot
                 # Tips from https://bqplot.readthedocs.io/en/latest/usage/updating-plots/ for hold_sync()
                 with scatter.hold_sync():
@@ -191,20 +191,16 @@ def label(
 
     def get_counts():
         val_counts = df[label_col_name].value_counts()
-        if "true" in val_counts.index:
-            true_counts = val_counts.loc["true"]
-        else:
-            true_counts = 0
+        ans_string = ""
+        for i in labels:
+            if i in val_counts.index:
+                class_counts = val_counts.loc[i]
+            else:
+                class_counts = 0
 
-        if "false" in val_counts.index:
-            false_counts = val_counts.loc["false"]
-        else:
-            false_counts = 0
+            ans_string += f"{i}: {class_counts}<br>"
 
-        return f"""
-        Num pts selected: {true_counts} <br>
-        Num pts unselected: {false_counts}
-        """
+        return ans_string
 
     html_div = ipy.HTML(get_counts())
 
@@ -217,5 +213,5 @@ def label(
     sel.observe(update_toggle_selector, "brushing")
 
     return ipy.VBox(
-        [fig, interacts, reset_zoom_btn, html_div],
+        [label_class_dropdown, fig, interacts, reset_zoom_btn, html_div],
     )
