@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_datetime64_any_dtype
 import traitlets
 import bqplot
 import ipywidgets as ipy
@@ -35,7 +36,19 @@ def label(
     else:
         df.loc[:, label_col_name] = False
 
-    scales = {"x": bqplot.LinearScale(), "y": bqplot.LinearScale()}
+    scales = {}
+
+    # Check and decide what axes are best
+    if is_datetime64_any_dtype(df[x_col]):
+        scales["x"] = bqplot.DateScale()
+    else:
+        scales["x"] = bqplot.LinearScale()
+
+    # Same goes for y axis!
+    if is_datetime64_any_dtype(df[y_col]):
+        scales["y"] = bqplot.DateScale()
+    else:
+        scales["y"] = bqplot.LinearScale()
 
     scatter = bqplot.Scatter(
         x=df.loc[df[label_col_name] == False, x_col],
