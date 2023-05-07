@@ -6,6 +6,10 @@ import bqplot
 import ipywidgets as ipy
 from collections import OrderedDict
 from typing import Any, Text, Optional
+from __version import __version__
+
+# Single source versioning
+# Learnt from https://stackoverflow.com/a/7071358/13095028
 
 
 def label(
